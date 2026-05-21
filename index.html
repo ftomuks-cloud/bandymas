@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Virtuali lenta</title>
+  <title>Bendra virtuali lenta</title>
   <style>
     :root {
       --bg: #eef2ff;
@@ -14,12 +14,12 @@
       --accent: #2563eb;
       --accent-dark: #1d4ed8;
       --danger: #dc2626;
+      --ok: #16a34a;
+      --warn: #d97706;
       --shadow: 0 18px 50px rgba(15, 23, 42, 0.14);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -45,7 +45,7 @@
       align-items: center;
       gap: 16px;
       flex-wrap: wrap;
-      background: rgba(255, 255, 255, 0.88);
+      background: rgba(255, 255, 255, 0.9);
       border: 1px solid rgba(209, 213, 219, 0.85);
       border-radius: 22px;
       padding: 14px 16px;
@@ -63,6 +63,29 @@
       margin-top: 3px;
       color: var(--muted);
       font-size: 0.92rem;
+      line-height: 1.35;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--warn);
+      box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.12);
+    }
+
+    .dot.online {
+      background: var(--ok);
+      box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.12);
     }
 
     .toolbar {
@@ -83,9 +106,7 @@
       border-radius: 16px;
     }
 
-    button, select, input[type="range"] {
-      font: inherit;
-    }
+    button, select, input[type="range"] { font: inherit; }
 
     button, select {
       border: 1px solid var(--border);
@@ -102,6 +123,12 @@
       transform: translateY(-1px);
     }
 
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     button.active {
       background: var(--accent);
       color: #fff;
@@ -115,13 +142,9 @@
       font-weight: 700;
     }
 
-    button.primary:hover {
-      background: var(--accent-dark);
-    }
+    button.primary:hover { background: var(--accent-dark); }
 
-    button.danger {
-      color: var(--danger);
-    }
+    button.danger { color: var(--danger); }
 
     input[type="color"] {
       width: 42px;
@@ -173,7 +196,7 @@
       position: absolute;
       display: none;
       min-width: 160px;
-      max-width: 260px;
+      max-width: 280px;
       padding: 9px 10px;
       border: 2px solid var(--accent);
       border-radius: 12px;
@@ -189,38 +212,37 @@
       position: absolute;
       right: 14px;
       bottom: 14px;
-      max-width: 360px;
+      max-width: 420px;
       padding: 10px 12px;
       border-radius: 14px;
       color: #475569;
-      background: rgba(255, 255, 255, 0.86);
+      background: rgba(255, 255, 255, 0.88);
       border: 1px solid rgba(209, 213, 219, 0.9);
       font-size: 0.9rem;
       pointer-events: none;
     }
 
-    @media (max-width: 720px) {
-      .app {
-        padding: 10px;
-      }
+    .error-box {
+      display: none;
+      margin-top: 8px;
+      padding: 9px 11px;
+      border-radius: 12px;
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+      font-size: 0.88rem;
+      max-width: 680px;
+    }
 
-      header {
-        border-radius: 16px;
-      }
-
-      .toolbar {
-        justify-content: flex-start;
-      }
-
+    @media (max-width: 760px) {
+      .app { padding: 10px; }
+      header { border-radius: 16px; }
+      .toolbar { justify-content: flex-start; }
       .group {
         width: 100%;
         justify-content: space-between;
       }
-
-      .canvas-wrap {
-        min-height: 520px;
-      }
-
+      .canvas-wrap { min-height: 540px; }
       .help {
         left: 14px;
         right: 14px;
@@ -233,8 +255,15 @@
   <main class="app">
     <header>
       <div>
-        <h1>Virtuali lenta</h1>
-        <div class="subtitle">Piešk, trink, rašyk tekstą ir išsaugok lentą kaip paveikslėlį.</div>
+        <h1>Bendra virtuali lenta</h1>
+        <div class="subtitle">
+          Visi, kurie atsidaro šią nuorodą, mato tą pačią lentą. Piešiniai saugomi Firebase Realtime Database.
+        </div>
+        <div class="status">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">Jungiamasi prie Firebase...</span>
+        </div>
+        <div class="error-box" id="errorBox"></div>
       </div>
 
       <div class="toolbar" aria-label="Lentos įrankiai">
@@ -263,9 +292,8 @@
         </div>
 
         <div class="group">
-          <button id="undoBtn" type="button">↶ Atgal</button>
-          <button id="redoBtn" type="button">↷ Pirmyn</button>
-          <button id="clearBtn" class="danger" type="button">🗑️ Valyti</button>
+          <button id="undoBtn" type="button">↶ Atšaukti mano paskutinį</button>
+          <button id="clearBtn" class="danger" type="button">🗑️ Išvalyti visiems</button>
           <button id="saveBtn" class="primary" type="button">💾 Išsaugoti PNG</button>
         </div>
       </div>
@@ -273,20 +301,49 @@
 
     <section class="board-shell">
       <div class="canvas-wrap" id="canvasWrap">
-        <canvas id="board" aria-label="Virtuali piešimo lenta"></canvas>
+        <canvas id="board" aria-label="Bendra virtuali piešimo lenta"></canvas>
         <input id="noteInput" class="note-input" type="text" placeholder="Įrašyk tekstą..." />
         <div class="help">
-          Patarimas: su pele arba pirštu piešk lentoje. Pasirink „Tekstas“ ir spustelėk lentoje, kad pridėtum užrašą.
+          Piešk pele arba pirštu. Užbaik brūkšnį pakeldamas pirštą ar pelę — tada jis atsiras ir kitiems.
         </div>
       </div>
     </section>
   </main>
 
-  <script>
-    const canvas = document.getElementById("board");
-    const wrap = document.getElementById("canvasWrap");
-    const ctx = canvas.getContext("2d");
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      push,
+      set,
+      remove,
+      onValue,
+      serverTimestamp,
+      onDisconnect
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
+    const firebaseConfig = {
+      apiKey: "AIzaSyA5zJ2jx67MMg9b_aYn7QW1_ORmQAaMrCg",
+      authDomain: "virtuali-lenta.firebaseapp.com",
+      databaseURL: "https://virtuali-lenta-default-rtdb.europe-west1.firebasedatabase.app/",
+      projectId: "virtuali-lenta",
+      storageBucket: "virtuali-lenta.firebasestorage.app",
+      messagingSenderId: "101736426636",
+      appId: "1:101736426636:web:4c6c8da5417e4a8d06dfa9"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const boardId = "bendra-lenta";
+    const elementsRef = ref(db, `boards/${boardId}/elements`);
+    const backgroundRef = ref(db, `boards/${boardId}/meta/background`);
+    const presenceRef = ref(db, `boards/${boardId}/presence/${getClientId()}`);
+    const connectedRef = ref(db, ".info/connected");
+
+    const canvas = document.getElementById("board");
+    const ctx = canvas.getContext("2d");
     const penBtn = document.getElementById("penBtn");
     const eraserBtn = document.getElementById("eraserBtn");
     const textBtn = document.getElementById("textBtn");
@@ -295,45 +352,80 @@
     const sizeValue = document.getElementById("sizeValue");
     const backgroundSelect = document.getElementById("background");
     const undoBtn = document.getElementById("undoBtn");
-    const redoBtn = document.getElementById("redoBtn");
     const clearBtn = document.getElementById("clearBtn");
     const saveBtn = document.getElementById("saveBtn");
     const noteInput = document.getElementById("noteInput");
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const errorBox = document.getElementById("errorBox");
+
+    const clientId = getClientId();
+    const ownKeys = JSON.parse(localStorage.getItem("manoLentosObjektai") || "[]");
 
     let tool = "pen";
     let isDrawing = false;
     let last = null;
-    let history = [];
-    let redoStack = [];
+    let currentStroke = null;
+    let allElements = [];
+    let currentBackground = "blank";
     let textPosition = null;
+    let suppressBgEvent = false;
 
     const board = {
       width: 1600,
       height: 1000
     };
 
-    function resizeCanvas() {
-      const oldImage = document.createElement("canvas");
-      oldImage.width = canvas.width || board.width;
-      oldImage.height = canvas.height || board.height;
-      oldImage.getContext("2d").drawImage(canvas, 0, 0);
-
-      canvas.width = board.width;
-      canvas.height = board.height;
-
-      ctx.drawImage(oldImage, 0, 0, canvas.width, canvas.height);
-      redrawFromHistory();
+    function getClientId() {
+      let id = localStorage.getItem("lentosClientId");
+      if (!id) {
+        id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+        localStorage.setItem("lentosClientId", id);
+      }
+      return id;
     }
 
-    function drawBackground() {
+    function showError(message) {
+      errorBox.style.display = "block";
+      errorBox.textContent = message;
+    }
+
+    function setStatus(isOnline, text) {
+      statusDot.classList.toggle("online", isOnline);
+      statusText.textContent = text;
+    }
+
+    function initPresence() {
+      onValue(connectedRef, (snapshot) => {
+        if (snapshot.val() === true) {
+          set(presenceRef, {
+            online: true,
+            updatedAt: Date.now()
+          });
+          onDisconnect(presenceRef).remove();
+          setStatus(true, "Prisijungta. Lenta sinchronizuojama.");
+        } else {
+          setStatus(false, "Nėra ryšio su Firebase.");
+        }
+      }, (error) => {
+        setStatus(false, "Nepavyko prisijungti.");
+        showError("Firebase klaida: " + error.message);
+      });
+    }
+
+    function resizeCanvas() {
+      canvas.width = board.width;
+      canvas.height = board.height;
+      redraw();
+    }
+
+    function drawBackground(type = currentBackground) {
       ctx.save();
       ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const bg = backgroundSelect.value;
-
-      if (bg === "grid") {
+      if (type === "grid") {
         ctx.strokeStyle = "#e5e7eb";
         ctx.lineWidth = 1;
         for (let x = 0; x <= canvas.width; x += 40) {
@@ -350,7 +442,7 @@
         }
       }
 
-      if (bg === "lines") {
+      if (type === "lines") {
         ctx.strokeStyle = "#dbeafe";
         ctx.lineWidth = 2;
         for (let y = 70; y <= canvas.height; y += 55) {
@@ -361,7 +453,7 @@
         }
       }
 
-      if (bg === "dots") {
+      if (type === "dots") {
         ctx.fillStyle = "#d1d5db";
         for (let x = 24; x <= canvas.width; x += 40) {
           for (let y = 24; y <= canvas.height; y += 40) {
@@ -375,43 +467,120 @@
       ctx.restore();
     }
 
+    function redraw() {
+      drawBackground(currentBackground);
+      allElements.forEach(drawElement);
+      updateUndoButton();
+    }
+
+    function drawElement(element) {
+      if (!element) return;
+
+      if (element.type === "stroke") {
+        drawStroke(element);
+      }
+
+      if (element.type === "text") {
+        drawText(element);
+      }
+    }
+
+    function drawStroke(stroke) {
+      if (!stroke.points || stroke.points.length < 1) return;
+
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Number(stroke.size || 7);
+
+      if (stroke.tool === "eraser") {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = stroke.color || "#111827";
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+
+      if (stroke.points.length === 1) {
+        const p = stroke.points[0];
+        ctx.lineTo(p.x + 0.01, p.y + 0.01);
+      }
+
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawSegment(a, b, strokeTool, color, size) {
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Number(size || 7);
+
+      if (strokeTool === "eraser") {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = color || "#111827";
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawText(element) {
+      const fontSize = Math.max(18, Number(element.size || 7) * 4);
+      const text = String(element.text || "");
+
+      ctx.save();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = element.color || "#111827";
+      ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
+      ctx.textBaseline = "top";
+
+      const lines = wrapText(text, 32);
+      lines.forEach((line, index) => {
+        ctx.fillText(line, element.x, element.y + index * fontSize * 1.25);
+      });
+
+      ctx.restore();
+    }
+
+    function wrapText(text, maxChars) {
+      const words = text.split(/\s+/);
+      const lines = [];
+      let line = "";
+
+      words.forEach((word) => {
+        const test = line ? `${line} ${word}` : word;
+        if (test.length > maxChars && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      });
+
+      if (line) lines.push(line);
+      return lines.length ? lines : [text];
+    }
+
     function getPoint(event) {
       const rect = canvas.getBoundingClientRect();
       return {
         x: (event.clientX - rect.left) * (canvas.width / rect.width),
         y: (event.clientY - rect.top) * (canvas.height / rect.height)
       };
-    }
-
-    function snapshot() {
-      history.push(canvas.toDataURL("image/png"));
-      if (history.length > 40) history.shift();
-      redoStack = [];
-      updateButtons();
-    }
-
-    function restore(dataUrl, callback) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        if (callback) callback();
-      };
-      img.src = dataUrl;
-    }
-
-    function redrawFromHistory() {
-      if (history.length > 0) {
-        restore(history[history.length - 1]);
-      } else {
-        drawBackground();
-        snapshot();
-      }
-    }
-
-    function updateButtons() {
-      undoBtn.disabled = history.length <= 1;
-      redoBtn.disabled = redoStack.length === 0;
     }
 
     function setTool(nextTool) {
@@ -429,45 +598,60 @@
       }
 
       isDrawing = true;
-      last = getPoint(event);
+      const point = getPoint(event);
+      last = point;
+      currentStroke = {
+        type: "stroke",
+        tool,
+        color: colorInput.value,
+        size: Number(sizeInput.value),
+        points: [point],
+        clientId
+      };
+
       canvas.setPointerCapture(event.pointerId);
     }
 
     function draw(event) {
-      if (!isDrawing || !last) return;
+      if (!isDrawing || !last || !currentStroke) return;
 
       const current = getPoint(event);
+      const dx = current.x - last.x;
+      const dy = current.y - last.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
 
-      ctx.save();
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.lineWidth = Number(sizeInput.value);
+      if (distance < 2) return;
 
-      if (tool === "eraser") {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.strokeStyle = "rgba(0,0,0,1)";
-      } else {
-        ctx.globalCompositeOperation = "source-over";
-        ctx.strokeStyle = colorInput.value;
-      }
-
-      ctx.beginPath();
-      ctx.moveTo(last.x, last.y);
-      ctx.lineTo(current.x, current.y);
-      ctx.stroke();
-      ctx.restore();
-
+      currentStroke.points.push(current);
+      drawSegment(last, current, currentStroke.tool, currentStroke.color, currentStroke.size);
       last = current;
     }
 
-    function stopDrawing(event) {
-      if (!isDrawing) return;
+    async function stopDrawing(event) {
+      if (!isDrawing || !currentStroke) return;
+
       isDrawing = false;
       last = null;
+
       try {
         canvas.releasePointerCapture(event.pointerId);
       } catch (_) {}
-      snapshot();
+
+      const element = {
+        ...currentStroke,
+        createdAt: Date.now(),
+        serverCreatedAt: serverTimestamp()
+      };
+
+      currentStroke = null;
+
+      try {
+        const newRef = push(elementsRef);
+        await set(newRef, element);
+        rememberOwnKey(newRef.key);
+      } catch (error) {
+        showError("Nepavyko išsaugoti brūkšnio. Patikrink, ar Realtime Database taisyklės leidžia rašyti. Klaida: " + error.message);
+      }
     }
 
     function openTextInput(event) {
@@ -484,67 +668,117 @@
       noteInput.focus();
     }
 
-    function commitText() {
+    async function commitText() {
       const text = noteInput.value.trim();
+
       if (!text || !textPosition) {
         noteInput.style.display = "none";
+        textPosition = null;
         return;
       }
 
-      const fontSize = Math.max(18, Number(sizeInput.value) * 4);
-      ctx.save();
-      ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = colorInput.value;
-      ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
-      ctx.textBaseline = "top";
+      const element = {
+        type: "text",
+        text,
+        x: textPosition.x,
+        y: textPosition.y,
+        color: colorInput.value,
+        size: Number(sizeInput.value),
+        clientId,
+        createdAt: Date.now(),
+        serverCreatedAt: serverTimestamp()
+      };
 
-      const lines = text.match(/.{1,32}/g) || [text];
-      lines.forEach((line, index) => {
-        ctx.fillText(line, textPosition.x, textPosition.y + index * fontSize * 1.25);
-      });
-
-      ctx.restore();
       noteInput.style.display = "none";
       textPosition = null;
-      snapshot();
+
+      try {
+        const newRef = push(elementsRef);
+        await set(newRef, element);
+        rememberOwnKey(newRef.key);
+      } catch (error) {
+        showError("Nepavyko išsaugoti teksto. Patikrink Realtime Database taisykles. Klaida: " + error.message);
+      }
     }
 
-    function undo() {
-      if (history.length <= 1) return;
-      redoStack.push(history.pop());
-      restore(history[history.length - 1], updateButtons);
+    function rememberOwnKey(key) {
+      if (!key) return;
+      ownKeys.push(key);
+      while (ownKeys.length > 30) ownKeys.shift();
+      localStorage.setItem("manoLentosObjektai", JSON.stringify(ownKeys));
+      updateUndoButton();
     }
 
-    function redo() {
-      if (redoStack.length === 0) return;
-      const data = redoStack.pop();
-      history.push(data);
-      restore(data, updateButtons);
+    function updateUndoButton() {
+      undoBtn.disabled = ownKeys.length === 0;
     }
 
-    function clearBoard() {
-      const ok = confirm("Ar tikrai išvalyti lentą?");
+    async function undoOwnLast() {
+      const key = ownKeys.pop();
+      localStorage.setItem("manoLentosObjektai", JSON.stringify(ownKeys));
+      updateUndoButton();
+      if (!key) return;
+
+      try {
+        await remove(ref(db, `boards/${boardId}/elements/${key}`));
+      } catch (error) {
+        showError("Nepavyko atšaukti paskutinio veiksmo: " + error.message);
+      }
+    }
+
+    async function clearBoard() {
+      const ok = confirm("Ar tikrai išvalyti lentą visiems žmonėms?");
       if (!ok) return;
-      drawBackground();
-      snapshot();
+
+      try {
+        await remove(elementsRef);
+        ownKeys.length = 0;
+        localStorage.setItem("manoLentosObjektai", JSON.stringify(ownKeys));
+        updateUndoButton();
+      } catch (error) {
+        showError("Nepavyko išvalyti lentos. Klaida: " + error.message);
+      }
     }
 
-    function changeBackground() {
-      const image = new Image();
-      image.onload = () => {
-        drawBackground();
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-        snapshot();
-      };
-      image.src = canvas.toDataURL("image/png");
+    async function changeBackground() {
+      if (suppressBgEvent) return;
+
+      try {
+        await set(backgroundRef, backgroundSelect.value);
+      } catch (error) {
+        showError("Nepavyko pakeisti fono: " + error.message);
+      }
     }
 
     function savePng() {
+      redraw();
       const link = document.createElement("a");
       const date = new Date().toISOString().slice(0, 10);
-      link.download = `virtuali-lenta-${date}.png`;
+      link.download = `bendra-virtuali-lenta-${date}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
+    }
+
+    function subscribeToFirebase() {
+      onValue(elementsRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        allElements = Object.entries(data)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, value]) => ({ key, ...value }));
+        redraw();
+      }, (error) => {
+        showError("Nepavyko nuskaityti lentos. Patikrink Firebase Rules. Klaida: " + error.message);
+      });
+
+      onValue(backgroundRef, (snapshot) => {
+        currentBackground = snapshot.val() || "blank";
+        suppressBgEvent = true;
+        backgroundSelect.value = currentBackground;
+        suppressBgEvent = false;
+        redraw();
+      }, (error) => {
+        showError("Nepavyko nuskaityti fono: " + error.message);
+      });
     }
 
     penBtn.addEventListener("click", () => setTool("pen"));
@@ -556,9 +790,7 @@
     });
 
     backgroundSelect.addEventListener("change", changeBackground);
-
-    undoBtn.addEventListener("click", undo);
-    redoBtn.addEventListener("click", redo);
+    undoBtn.addEventListener("click", undoOwnLast);
     clearBtn.addEventListener("click", clearBoard);
     saveBtn.addEventListener("click", savePng);
 
@@ -578,24 +810,12 @@
 
     noteInput.addEventListener("blur", commitText);
 
-    window.addEventListener("keydown", (event) => {
-      const key = event.key.toLowerCase();
-
-      if ((event.ctrlKey || event.metaKey) && key === "z") {
-        event.preventDefault();
-        undo();
-      }
-
-      if ((event.ctrlKey || event.metaKey) && (key === "y" || (event.shiftKey && key === "z"))) {
-        event.preventDefault();
-        redo();
-      }
-    });
+    window.addEventListener("resize", redraw);
 
     resizeCanvas();
-    drawBackground();
-    history = [];
-    snapshot();
+    initPresence();
+    subscribeToFirebase();
+    updateUndoButton();
   </script>
 </body>
 </html>
