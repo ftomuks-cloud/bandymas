@@ -212,7 +212,7 @@
       position: absolute;
       right: 14px;
       bottom: 14px;
-      max-width: 420px;
+      max-width: 460px;
       padding: 10px 12px;
       border-radius: 14px;
       color: #475569;
@@ -257,7 +257,7 @@
       <div>
         <h1>Bendra virtuali lenta</h1>
         <div class="subtitle">
-          Visi, kurie atsidaro šią nuorodą, mato tą pačią lentą. Piešiniai saugomi Firebase Realtime Database.
+          Visi, kurie atsidaro šią nuorodą, mato tą pačią lentą. Dabar piešimas matomas gyvai.
         </div>
         <div class="status">
           <span class="dot" id="statusDot"></span>
@@ -304,7 +304,7 @@
         <canvas id="board" aria-label="Bendra virtuali piešimo lenta"></canvas>
         <input id="noteInput" class="note-input" type="text" placeholder="Įrašyk tekstą..." />
         <div class="help">
-          Piešk pele arba pirštu. Užbaik brūkšnį pakeldamas pirštą ar pelę — tada jis atsiras ir kitiems.
+          Piešiant brūkšnys siunčiamas į Firebase kas keliasdešimt milisekundžių, todėl kiti mato piešimą beveik gyvai.
         </div>
       </div>
     </section>
@@ -338,6 +338,8 @@
 
     const boardId = "bendra-lenta";
     const elementsRef = ref(db, `boards/${boardId}/elements`);
+    const liveStrokesRef = ref(db, `boards/${boardId}/liveStrokes`);
+    const myLiveStrokeRef = ref(db, `boards/${boardId}/liveStrokes/${getClientId()}`);
     const backgroundRef = ref(db, `boards/${boardId}/meta/background`);
     const presenceRef = ref(db, `boards/${boardId}/presence/${getClientId()}`);
     const connectedRef = ref(db, ".info/connected");
@@ -367,9 +369,12 @@
     let last = null;
     let currentStroke = null;
     let allElements = [];
+    let liveStrokes = [];
     let currentBackground = "blank";
     let textPosition = null;
     let suppressBgEvent = false;
+    let lastLiveSend = 0;
+    let pendingLiveTimer = null;
 
     const board = {
       width: 1600,
@@ -403,7 +408,8 @@
             updatedAt: Date.now()
           });
           onDisconnect(presenceRef).remove();
-          setStatus(true, "Prisijungta. Lenta sinchronizuojama.");
+          onDisconnect(myLiveStrokeRef).remove();
+          setStatus(true, "Prisijungta. Lenta sinchronizuojama gyvai.");
         } else {
           setStatus(false, "Nėra ryšio su Firebase.");
         }
@@ -470,6 +476,13 @@
     function redraw() {
       drawBackground(currentBackground);
       allElements.forEach(drawElement);
+      liveStrokes.forEach(drawElement);
+
+      // Jei piešiame šiuo metu, parodome ir savo dar neužbaigtą brūkšnį.
+      if (currentStroke && !liveStrokes.some(stroke => stroke.clientId === clientId)) {
+        drawElement(currentStroke);
+      }
+
       updateUndoButton();
     }
 
@@ -591,7 +604,7 @@
       canvas.style.cursor = tool === "text" ? "text" : "crosshair";
     }
 
-    function startDrawing(event) {
+    async function startDrawing(event) {
       if (tool === "text") {
         openTextInput(event);
         return;
@@ -606,10 +619,13 @@
         color: colorInput.value,
         size: Number(sizeInput.value),
         points: [point],
-        clientId
+        clientId,
+        live: true,
+        updatedAt: Date.now()
       };
 
       canvas.setPointerCapture(event.pointerId);
+      await sendLiveStroke(true);
     }
 
     function draw(event) {
@@ -623,8 +639,13 @@
       if (distance < 2) return;
 
       currentStroke.points.push(current);
+      currentStroke.updatedAt = Date.now();
+
+      // Vietiniame ekrane piešiame iš karto, kad nebūtų vėlavimo.
       drawSegment(last, current, currentStroke.tool, currentStroke.color, currentStroke.size);
       last = current;
+
+      scheduleLiveStrokeSend();
     }
 
     async function stopDrawing(event) {
@@ -637,8 +658,14 @@
         canvas.releasePointerCapture(event.pointerId);
       } catch (_) {}
 
+      if (pendingLiveTimer) {
+        clearTimeout(pendingLiveTimer);
+        pendingLiveTimer = null;
+      }
+
       const element = {
         ...currentStroke,
+        live: false,
         createdAt: Date.now(),
         serverCreatedAt: serverTimestamp()
       };
@@ -649,8 +676,47 @@
         const newRef = push(elementsRef);
         await set(newRef, element);
         rememberOwnKey(newRef.key);
+        await remove(myLiveStrokeRef);
       } catch (error) {
-        showError("Nepavyko išsaugoti brūkšnio. Patikrink, ar Realtime Database taisyklės leidžia rašyti. Klaida: " + error.message);
+        showError("Nepavyko išsaugoti brūkšnio. Patikrink Firebase Rules. Klaida: " + error.message);
+        try {
+          await remove(myLiveStrokeRef);
+        } catch (_) {}
+      }
+    }
+
+    function scheduleLiveStrokeSend() {
+      const now = Date.now();
+      const intervalMs = 55;
+
+      if (now - lastLiveSend >= intervalMs) {
+        sendLiveStroke();
+        return;
+      }
+
+      if (!pendingLiveTimer) {
+        pendingLiveTimer = setTimeout(() => {
+          pendingLiveTimer = null;
+          sendLiveStroke();
+        }, intervalMs - (now - lastLiveSend));
+      }
+    }
+
+    async function sendLiveStroke(force = false) {
+      if (!currentStroke) return;
+
+      const now = Date.now();
+      if (!force && now - lastLiveSend < 35) return;
+
+      lastLiveSend = now;
+
+      try {
+        await set(myLiveStrokeRef, {
+          ...currentStroke,
+          updatedAt: Date.now()
+        });
+      } catch (error) {
+        showError("Nepavyko siųsti gyvo piešimo. Klaida: " + error.message);
       }
     }
 
@@ -732,6 +798,7 @@
 
       try {
         await remove(elementsRef);
+        await remove(liveStrokesRef);
         ownKeys.length = 0;
         localStorage.setItem("manoLentosObjektai", JSON.stringify(ownKeys));
         updateUndoButton();
@@ -768,6 +835,19 @@
         redraw();
       }, (error) => {
         showError("Nepavyko nuskaityti lentos. Patikrink Firebase Rules. Klaida: " + error.message);
+      });
+
+      onValue(liveStrokesRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        const now = Date.now();
+
+        liveStrokes = Object.values(data)
+          .filter(stroke => stroke && stroke.points && stroke.points.length > 0)
+          .filter(stroke => !stroke.updatedAt || now - stroke.updatedAt < 30000);
+
+        redraw();
+      }, (error) => {
+        showError("Nepavyko nuskaityti gyvų brūkšnių. Klaida: " + error.message);
       });
 
       onValue(backgroundRef, (snapshot) => {
@@ -811,6 +891,9 @@
     noteInput.addEventListener("blur", commitText);
 
     window.addEventListener("resize", redraw);
+    window.addEventListener("beforeunload", () => {
+      remove(myLiveStrokeRef);
+    });
 
     resizeCanvas();
     initPresence();
